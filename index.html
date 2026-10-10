@@ -203,6 +203,17 @@
         <p class="hint">このページのアドレスを知っている人は操作もできるので、人に教えないでください。</p>
         <button class="btn" id="resetBtn">接続先を変更する</button>
       </div>
+
+      <h2>商品ページを開くブラウザ</h2>
+      <div class="card">
+        <div class="days" id="browserPick" style="gap:6px">
+          <button class="chip" data-br="edge">Edge</button>
+          <button class="chip" data-br="chrome">Chrome</button>
+          <button class="chip" data-br="safari">Safari</button>
+          <button class="chip" data-br="inapp">このページ内</button>
+        </div>
+        <p class="hint">このページから商品ページを開くときに使うブラウザです。在庫があるときは、一番優先のサイズを選んだ状態で開くための目印も付けます（ブラウザ側にスクリプトが入っている場合）。</p>
+      </div>
     </section>
   </main>
 
@@ -354,7 +365,7 @@ function render() {
       : hit.length ? `<span class="ok">在庫あり: ${esc(hit.join(', '))}</span>` : `<span class="ng">${watch ? '指定サイズは売り切れ' : '全サイズ売り切れ'}</span>`;
     return `<div class="card"><div class="row">
       <img class="thumb" src="${esc(IMG(it.i))}" alt="" loading="lazy">
-      <div class="body"><div class="name"><span class="sub">${i + 1}.</span> <a href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t || it.u.split('/').pop())}</a></div>
+      <div class="body"><div class="name"><span class="sub">${i + 1}.</span> <a href="${esc(it.u)}" data-ext="${esc(hit.length ? (watch ? watch.find(x => hit.includes(x)) : hit[0]) : '')}">${esc(it.t || it.u.split('/').pop())}</a></div>
         <div class="sub">${esc(it.c)}</div></div>
       <div class="side">
         <button class="iconbtn" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="上へ">▲</button>
@@ -372,7 +383,7 @@ function render() {
     const day = `${d.getMonth() + 1}/${d.getDate()}(${DAYS[d.getDay()]})`;
     const sizes = e.s.map(s => e.so[s] ? `<span class="logsize">${esc(s)} → ${fmtT(e.so[s])} 売り切れ</span>` : `<span class="logsize open">${esc(s)} 在庫あり</span>`).join('');
     return `<div class="card"><div class="row"><img class="thumb" src="${esc(IMG(e.i))}" alt="" loading="lazy">
-      <div class="body"><div class="name"><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.t)}</a><span class="tag">${e.src === 'watch' ? '監視中' : 'ショップ'}</span></div>
+      <div class="body"><div class="name"><a href="${esc(e.u)}" data-ext="${esc(e.s.find(x => !e.so[x]) || '')}">${esc(e.t)}</a><span class="tag">${e.src === 'watch' ? '監視中' : 'ショップ'}</span></div>
       <div class="sub">${esc(e.c)} ・ ${day} ${fmtTs(e.at)} 入荷</div><div>${sizes}</div></div></div></div>`;
   }).join('') : '<div class="empty">まだ入荷の記録はありません</div>';
 
@@ -390,7 +401,27 @@ function render() {
 // ---------- 操作（すぐ画面に反映して、パソコンにも送る） ----------
 function itemByUrl(u) { return S && S.items.find(x => x.u === u); }
 
+// ---------- 外部ブラウザで開く ----------
+const getBrowser = () => store.get('browser') || 'edge';
+function openExternal(url, size) {
+  if (size) url = url.replace(/#.*$/, '') + '#s=' + encodeURIComponent(size);
+  const b = getBrowser();
+  let target = url;
+  if (b === 'edge') target = 'microsoft-edge-' + url;                       // microsoft-edge-https://…
+  else if (b === 'chrome') target = url.replace(/^https:\/\//, 'googlechromes://');
+  else if (b === 'safari') target = 'x-safari-' + url;                       // x-safari-https://…
+  else { window.open(url, '_blank', 'noopener'); return; }
+  location.href = target;
+}
+function renderBrowserPick() {
+  document.querySelectorAll('#browserPick [data-br]').forEach(b => b.classList.toggle('on', b.dataset.br === getBrowser()));
+}
+
 document.addEventListener('click', e => {
+  const ext = e.target.closest('a[data-ext]');
+  if (ext) { e.preventDefault(); openExternal(ext.getAttribute('href'), ext.dataset.ext); return; }
+  const br = e.target.closest('[data-br]');
+  if (br) { store.set('browser', br.dataset.br); renderBrowserPick(); toast(br.textContent + ' で開くようにしました'); return; }
   const chip = e.target.closest('.chip[data-k]');
   if (chip && S) {
     const u = chip.dataset.u, s = chip.dataset.s;
@@ -508,7 +539,7 @@ function showResults(d) {
     const all = p.v.map(v => v[0]), inS = p.v.filter(v => v[1]).map(v => v[0]);
     const sel = pick[p.u] || [];
     return `<div class="card"><div class="row"><img class="thumb" src="${esc(IMG(p.i))}" alt="" loading="lazy">
-      <div class="body"><div class="name"><a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t)}</a></div>
+      <div class="body"><div class="name"><a href="${esc(p.u)}" data-ext="">${esc(p.t)}</a></div>
       <div class="sub">${esc(p.c)}${p.pr ? ' ・ ¥' + Math.round(p.pr / 100).toLocaleString('ja-JP') : ''} ・ ${inS.length ? `<span class="ok">${inS.length}サイズ在庫あり</span>` : '売り切れ'}</div></div></div>
       ${added ? '' : `<div class="chips">${sizeChipHtml(p.u, all, sel, inS, 'r')}</div>`}
       <div style="margin-top:10px"><button class="btn ${added ? '' : 'primary'}" data-add="${esc(p.u)}" ${added ? 'disabled' : ''} style="width:100%">${added ? '追加済み' : sel.length ? `追加（${esc(sel.join(', '))}）` : '追加（全サイズ）'}</button></div>
@@ -533,6 +564,7 @@ if (!TOPIC) {
 } else {
   $('app').style.display = '';
   $('topicView').textContent = TOPIC;
+  renderBrowserPick();
   render();
   connect();
   loadRecent();
