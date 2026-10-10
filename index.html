@@ -62,6 +62,7 @@
   .chip .d { width:7px; height:7px; border-radius:50%; background:var(--muted); opacity:.4; }
   .chip.in .d { background:var(--green); opacity:1; }
   .chip.on { background:var(--red); border-color:var(--red); color:#fff; }
+  .chip .n { display:inline-grid; place-items:center; min-width:18px; height:18px; border-radius:50%; background:#fff; color:var(--red); font-size:11px; font-weight:700; }
   .chip.on .d { background:#fff; opacity:.6; } .chip.on.in .d { background:#9ff0b0; opacity:1; }
   .state { font-size:13px; margin-top:8px; }
   .ok { color:var(--green); } .ng { color:var(--muted); } .err { color:var(--orange); }
@@ -135,7 +136,7 @@
         <button id="checkBtn">今すぐ確認</button>
       </div>
       <h2>監視中の商品 <span class="count" id="itemCount"></span></h2>
-      <p class="hint" style="margin-top:-4px">サイズをタップで通知するサイズを選択（何も選ばないと全サイズ）。緑の点は在庫あり。▲▼で優先順位。</p>
+      <p class="hint" style="margin-top:-4px">サイズをタップで通知するサイズを選択（何も選ばないと全サイズ）。<b>タップした順が優先順位</b>で、パソコンでは一番優先のサイズを選んだ状態で開きます。緑の点は在庫あり。▲▼で商品の優先順位。</p>
       <div id="items"></div>
     </section>
 
@@ -167,6 +168,8 @@
         <div class="field"><label>通知のあと確認を休む</label><span><input class="num" type="number" inputmode="numeric" id="pauseAfterNotify"> 分</span></div>
         <div class="field"><label>再入荷したら商品ページを開く<span class="sub">パソコンで、いちばん上の商品を開きます</span></label>
           <label class="toggle"><input type="checkbox" id="autoOpen"><span></span></label></div>
+        <div class="field"><label>監視中はパソコンをスリープさせない<span class="sub">画面は消えます。ノートPCのふたを閉じたときは防げません</span></label>
+          <label class="toggle"><input type="checkbox" id="keepAwake"><span></span></label></div>
         <div class="field"><label>追加した時点で在庫があるものも通知</label>
           <label class="toggle"><input type="checkbox" id="notifyOnStart"><span></span></label></div>
       </div>
@@ -319,7 +322,7 @@ function modeText() {
 function sizeChipHtml(url, all, selected, inStock, kind) {
   const sel = selected || [];
   return `<button class="chip ${sel.length ? '' : 'on'}" data-k="${kind}" data-u="${esc(url)}" data-s="">全サイズ</button>` +
-    all.map(s => `<button class="chip ${sel.includes(s) ? 'on' : ''} ${inStock.includes(s) ? 'in' : ''}" data-k="${kind}" data-u="${esc(url)}" data-s="${esc(s)}"><span class="d"></span>${esc(s)}</button>`).join('');
+    all.map(s => `<button class="chip ${sel.includes(s) ? 'on' : ''} ${inStock.includes(s) ? 'in' : ''}" data-k="${kind}" data-u="${esc(url)}" data-s="${esc(s)}"><span class="d"></span>${sel.length > 1 && sel.includes(s) ? `<span class="n">${sel.indexOf(s) + 1}</span>` : ''}${esc(s)}</button>`).join('');
 }
 
 function render() {
@@ -371,6 +374,7 @@ function render() {
   for (const k of ['interval', 'intervalMax', 'boostInterval', 'boostMinutes', 'pauseAfterNotify'])
     if (document.activeElement !== $(k)) $(k).value = c[k];
   $('autoOpen').checked = !!c.autoOpen;
+  $('keepAwake').checked = c.keepAwake !== false;
   $('notifyOnStart').checked = !!c.notifyOnStart;
   $('windows').innerHTML = c.boostWindows.length ? c.boostWindows.map((w, i) => `<div class="win"><span class="grow"><b>${w.days.map(d => DAYS[d]).join('')}</b> ${esc(w.start)}〜${esc(w.end)} <span class="sub">${w.interval}秒ごと</span></span>
       <button class="iconbtn" data-delwin="${i}" aria-label="削除">×</button></div>`).join('') : '<div class="sub">まだありません</div>';
@@ -460,7 +464,7 @@ for (const [k, [lo, hi]] of Object.entries(NUMS)) {
     send({ op: 'set', patch: S ? { interval: S.cfg.interval, intervalMax: S.cfg.intervalMax, [k]: n } : { [k]: n } }, '保存しました');
   });
 }
-for (const k of ['autoOpen', 'notifyOnStart']) $(k).addEventListener('change', e => send({ op: 'set', patch: { [k]: e.target.checked } }, '保存しました'));
+for (const k of ['autoOpen', 'keepAwake', 'notifyOnStart']) $(k).addEventListener('change', e => send({ op: 'set', patch: { [k]: e.target.checked } }, '保存しました'));
 $('presetBtn').addEventListener('click', () => send({ op: 'windows', preset: true }, '追加しました'));
 
 let newDays = [6];
