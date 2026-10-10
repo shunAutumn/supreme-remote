@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Supreme 再入荷チェッカー: サイズを選んだ状態で開く
 // @description  通知から開いた Supreme の商品ページで、指定のサイズを選んだ状態にします（カートには入れません）
-// @version      1.2
+// @version      1.3
 // @match        https://jp.supreme.com/products/*
 // @match        https://*.supreme.com/products/*
 // @run-at       document-end
@@ -53,8 +53,11 @@
         const o = [...s.options].find(x => x.value === variantId) || [...s.options].find(x => x.text.trim() === sizeTitle);
         const left = [...s.options].filter(x => x.value && !x.disabled).map(x => x.text.trim());
         s.scrollIntoView({ block: 'center' });
-        finish(`${o ? o.text.trim() : (sizeTitle || 'そのサイズ')} は${o ? '売り切れです' : '見つかりませんでした'}` +
-          (left.length ? `（在庫あり: ${left.join(' / ')}）` : '（ほかのサイズも在庫なし）'), '#b86200');
+        // Supreme は売り切れのサイズを一覧から消すので、見つからない＝売り切れとして伝える
+        // （ほかのサイズも一つもなければ、ページの作りが変わった可能性があるので「見つかりません」）
+        const name = o ? o.text.trim() : (sizeTitle || 'そのサイズ');
+        finish(left.length ? `${name} は売り切れです（在庫あり: ${left.join(' / ')}）`
+          : o ? `${name} は売り切れです（ほかのサイズも在庫なし）` : `${name} が見つかりませんでした（在庫のあるサイズもなし）`, '#b86200');
       }, SOLD_OUT_WAIT);
     }
   };
