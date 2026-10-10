@@ -283,6 +283,10 @@ async function handleRaw(m) {
   lastHeard = Math.max(lastHeard, (m.time || 0) * 1000);
   if (d.type === 'state') {
     if (!S || d.at >= S.at) { S = d; render(); }
+    if (d.ack) {
+      if (pendingAcks[d.ack.rid] !== undefined) { toast(d.ack.ok ? (d.ack.msg || pendingAcks[d.ack.rid]) : ('できませんでした: ' + d.ack.msg)); delete pendingAcks[d.ack.rid]; }
+      else if (!d.ack.ok) toast('できませんでした: ' + d.ack.msg);
+    }
   } else if (d.type === 'search') {
     if (d.rid === searchRid) showResults(d);
   } else if (d.type === 'ack') {
@@ -294,7 +298,7 @@ async function handleRaw(m) {
 // 直近に届いていた状態をまず読み込む（すぐ画面を出すため）
 async function loadRecent() {
   try {
-    const r = await fetch(`${BASE}/${encodeURIComponent(TOPIC + '-state')}/json?poll=1&since=30m`, { cache: 'no-store' });
+    const r = await fetch(`${BASE}/${encodeURIComponent(TOPIC + '-state')}/json?poll=1&since=12h`, { cache: 'no-store' });
     const lines = (await r.text()).split('\n').filter(Boolean);
     for (const line of lines.slice(-15)) { try { await handleRaw(JSON.parse(line)); } catch (e) {} }
   } catch (e) {}
@@ -302,22 +306,35 @@ async function loadRecent() {
 // これから届くものを受け取り続ける
 function connect() {
   if (es) es.close();
-  es = new EventSource(`${BASE}/${encodeURIComponent(TOPIC + '-state')}/sse`);
+  // 接続が確立する前に届いた返事も取りこぼさないよう、少し前から受け取る
+  es = new EventSource(`${BASE}/${encodeURIComponent(TOPIC + '-state')}/sse?since=${Math.floor(Date.now() / 1000) - 10}`);
   es.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } handleRaw(m); };
   es.onerror = () => updateConn();
 }
-function sync() { syncAskedAt = Date.now(); send({ op: 'sync' }); updateConn(); }
+function sync() {
+  syncAskedAt = Date.now();
+  send({ op: 'sync' });
+  updateConn();
+  // 念のため、返事が来ていなければ少しあとに直接読みに行く
+  for (const ms of [5000, 12000, 20000]) setTimeout(() => { if (lastHeard < syncAskedAt - 2000) loadRecent(); }, ms);
+}
 
 function updateConn() {
   const now = Date.now();
-  const fresh = lastHeard && now - lastHeard < 7 * 60000;
-  const waiting = syncAskedAt && lastHeard < syncAskedAt && now - syncAskedAt < 20000;
-  const dead = syncAskedAt && lastHeard < syncAskedAt && now - syncAskedAt >= 20000;
-  $('dot').className = 'dot ' + (dead ? 'ng' : fresh ? 'ok' : '');
-  $('connText').textContent = waiting ? 'PCに接続中…' : dead ? 'PCから応答なし' : fresh ? 'PCと接続中' : '確認中…';
+  const replied = lastHeard && lastHeard >= syncAskedAt - 2000;       // 最後のお願い（sync）以降に返事が来たか
+  const waiting = syncAskedAt && !replied && now - syncAskedAt < 25000;
+  const dead = syncAskedAt && !replied && now - syncAskedAt >= 25000;
+  $('dot').className = 'dot ' + (dead ? 'ng' : replied ? 'ok' : '');
+  $('connText').textContent = dead ? 'PCから応答なし' : waiting ? 'PCに確認中…' : replied ? `PCと接続中（${fmtT(lastHeard)}）` : '確認中…';
   const b = $('banner');
+  const q = S && S.q;
   if (dead) {
-    b.innerHTML = 'パソコンから応答がありません。Edge が閉じているか、パソコンがスリープ中かもしれません。' + (S ? `<br>（表示は ${fmtT(S.at)} 時点の情報です）` : '');
+    b.innerHTML = 'パソコンから返事がありません' + (S ? `（表示は ${fmtT(S.at)} 時点の情報です）` : '') +
+      '。<br>パソコンがスリープ中・Edge が閉じている、または ntfy の1日の送信上限（毎日9時ごろリセット）に達している可能性があります。';
+    b.classList.add('on');
+  } else if (q && q.remaining != null && q.remaining <= 40) {
+    b.innerHTML = q.remaining <= 0 ? 'ntfy の今日の送信上限に達しました（9時ごろリセット）。それまでスマホ通知とこのページの更新が止まります。'
+      : `ntfy の今日の残り送信数が少なくなっています（あと${q.remaining}通）。再入荷通知を優先するため、このページの更新は控えめになります。`;
     b.classList.add('on');
   } else b.classList.remove('on');
 }
@@ -572,6 +589,9 @@ if (!TOPIC) {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { connect(); loadRecent(); sync(); }
   });
+  // 開いている間だけ5分ごとに最新の状態をもらう（ntfy の送信回数を節約するため控えめに）
+  setInterval(() => { if (document.visibilityState === 'visible') sync(); }, 5 * 60000);
+  $('status').addEventListener('click', () => { sync(); toast('最新の状態を確認しています'); });
 }
 </script>
 </body>
