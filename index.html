@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="再入荷">
+<meta name="theme-color" content="#f6f6f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161616" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon.png">
+<title>Supreme 再入荷チェッカー</title>
+<style>
+  :root {
+    --bg:#f6f6f6; --fg:#161616; --muted:#717171; --line:#e2e2e2; --card:#fff; --chip:#f0f0f0;
+    --red:#d11a2a; --green:#17863a; --orange:#b86200; --blue:#1d5fd1; color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161616; --fg:#eee; --muted:#9a9a9a; --line:#2e2e2e; --card:#222; --chip:#2c2c2c;
+      --red:#ff4d5e; --green:#4cc76a; --orange:#f0a040; --blue:#6aa0ff; color-scheme: dark; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; background:var(--bg); color:var(--fg); }
+  body { font:15px/1.5 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif; padding-bottom:calc(70px + env(safe-area-inset-bottom)); }
+  button, input { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  .wrap { max-width:640px; margin:0 auto; padding:0 16px; }
+  header.top { position:sticky; top:0; z-index:5; background:var(--bg); padding:calc(10px + env(safe-area-inset-top)) 0 8px; border-bottom:1px solid var(--line); }
+  .titlebar { display:flex; align-items:center; gap:8px; }
+  .titlebar h1 { font-size:17px; margin:0; color:var(--red); flex:1; }
+  .conn { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:5px; white-space:nowrap; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .dot.ok { background:var(--green); } .dot.ng { background:var(--orange); }
+  .status { font-size:13px; margin-top:2px; color:var(--muted); }
+  .status b { color:var(--fg); }
+  .status .boost { color:var(--red); font-weight:600; }
+  .controls { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0 4px; }
+  .controls button { border:1px solid var(--line); background:var(--card); border-radius:12px; padding:10px 6px; font-size:13px; font-weight:600; min-height:48px; }
+  .controls button.on { background:var(--red); border-color:var(--red); color:#fff; }
+  .switchrow { display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-top:12px; }
+  .toggle { position:relative; width:52px; height:32px; flex:none; }
+  .toggle input { opacity:0; width:0; height:0; position:absolute; }
+  .toggle span { position:absolute; inset:0; background:var(--line); border-radius:999px; transition:.2s; }
+  .toggle span::after { content:''; position:absolute; left:3px; top:3px; width:26px; height:26px; border-radius:50%; background:#fff; transition:.2s; box-shadow:0 1px 3px #0003; }
+  .toggle input:checked + span { background:var(--green); }
+  .toggle input:checked + span::after { transform:translateX(20px); }
+  h2 { font-size:15px; margin:20px 0 8px; display:flex; align-items:center; gap:6px; }
+  h2 .count { color:var(--muted); font-weight:normal; font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:10px; }
+  .row { display:flex; gap:12px; align-items:flex-start; }
+  .thumb { width:64px; height:64px; border-radius:10px; object-fit:cover; background:var(--chip); flex:none; }
+  .body { flex:1; min-width:0; }
+  .name { font-weight:600; line-height:1.35; }
+  .name a { color:inherit; text-decoration:none; }
+  .sub { color:var(--muted); font-size:13px; }
+  .side { display:flex; flex-direction:column; gap:4px; align-items:center; flex:none; }
+  .iconbtn { width:36px; height:32px; border:1px solid var(--line); border-radius:8px; background:var(--chip); font-size:14px; padding:0; }
+  .iconbtn:disabled { opacity:.35; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .chip { border:1px solid var(--line); background:var(--chip); border-radius:999px; padding:6px 12px; font-size:13px; display:inline-flex; align-items:center; gap:6px; min-height:34px; }
+  .chip .d { width:7px; height:7px; border-radius:50%; background:var(--muted); opacity:.4; }
+  .chip.in .d { background:var(--green); opacity:1; }
+  .chip.on { background:var(--red); border-color:var(--red); color:#fff; }
+  .chip.on .d { background:#fff; opacity:.6; } .chip.on.in .d { background:#9ff0b0; opacity:1; }
+  .state { font-size:13px; margin-top:8px; }
+  .ok { color:var(--green); } .ng { color:var(--muted); } .err { color:var(--orange); }
+  .empty { color:var(--muted); text-align:center; padding:28px 8px; }
+  .search { display:flex; gap:8px; }
+  .search input { flex:1; min-width:0; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--card); font-size:16px; }
+  .btn { border:1px solid var(--line); background:var(--card); border-radius:10px; padding:10px 14px; font-weight:600; white-space:nowrap; }
+  .btn.primary { background:var(--red); border-color:var(--red); color:#fff; }
+  .btn:disabled { opacity:.5; }
+  .hint { color:var(--muted); font-size:12px; margin:8px 2px; }
+  .field { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }
+  .field:last-child { border-bottom:0; }
+  .field label { flex:1; }
+  .field .sub { display:block; }
+  .num { width:66px; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); text-align:center; font-size:16px; }
+  .win { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .win:last-child { border-bottom:0; }
+  .win .grow { flex:1; }
+  .days { display:flex; gap:4px; flex-wrap:wrap; }
+  .days .chip { padding:4px 10px; min-height:30px; }
+  input[type=time] { padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); font-size:16px; }
+  .logsize { display:inline-block; font-size:12px; border:1px solid var(--line); border-radius:999px; padding:1px 8px; margin:4px 4px 0 0; }
+  .logsize.open { border-color:var(--green); color:var(--green); font-weight:600; }
+  .tag { font-size:11px; border:1px solid var(--line); border-radius:4px; padding:0 5px; margin-left:4px; color:var(--muted); font-weight:normal; }
+  nav.tabs { position:fixed; left:0; right:0; bottom:0; z-index:6; background:var(--card); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  nav.tabs .in { max-width:640px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); }
+  nav.tabs button { border:0; background:none; padding:8px 0 6px; font-size:11px; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:2px; }
+  nav.tabs button .ic { font-size:20px; line-height:1.1; }
+  nav.tabs button.on { color:var(--red); font-weight:600; }
+  .page { display:none; } .page.on { display:block; }
+  .toast { position:fixed; left:50%; bottom:calc(84px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:#222; color:#fff; padding:10px 16px; border-radius:999px; font-size:13px; z-index:9; opacity:0; transition:opacity .2s; pointer-events:none; max-width:90vw; text-align:center; }
+  .toast.on { opacity:.95; }
+  .banner { background:var(--orange); color:#fff; border-radius:10px; padding:10px 12px; font-size:13px; margin-top:10px; display:none; }
+  .banner.on { display:block; }
+  .setup { padding-top:calc(40px + env(safe-area-inset-top)); }
+  .setup h1 { color:var(--red); font-size:20px; }
+  .setup input { width:100%; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--card); font-size:16px; margin:6px 0 12px; }
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--red); border-radius:50%; animation:sp 0.8s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- 初回設定 -->
+<div id="setup" class="wrap setup" style="display:none">
+  <h1>Supreme 再入荷チェッカー</h1>
+  <p>パソコンの拡張機能の設定画面に表示されている「スマホ用ページのアドレス」をこのブラウザで開くと、自動で接続されます。</p>
+  <p class="sub">または、ntfy のトピック名を入力してください（例: supreme-abc123…）。</p>
+  <input id="topicIn" placeholder="トピック名" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button class="btn primary" id="topicSave" style="width:100%">接続する</button>
+</div>
+
+<div id="app" style="display:none">
+  <header class="top">
+    <div class="wrap">
+      <div class="titlebar"><h1>Supreme 再入荷チェッカー</h1><span class="conn"><span class="dot" id="dot"></span><span id="connText">接続中…</span></span></div>
+      <div class="status" id="status"></div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="banner" id="banner"></div>
+
+    <!-- 監視中 -->
+    <section class="page on" id="p-watch">
+      <div class="switchrow"><span><b>監視</b> <span class="sub" id="enabledText"></span></span>
+        <label class="toggle"><input type="checkbox" id="enabled"><span></span></label></div>
+      <div class="controls">
+        <button id="boostBtn">⚡ 高速</button>
+        <button id="pauseBtn">休止 30分</button>
+        <button id="checkBtn">今すぐ確認</button>
+      </div>
+      <h2>監視中の商品 <span class="count" id="itemCount"></span></h2>
+      <p class="hint" style="margin-top:-4px">サイズをタップで通知するサイズを選択（何も選ばないと全サイズ）。緑の点は在庫あり。▲▼で優先順位。</p>
+      <div id="items"></div>
+    </section>
+
+    <!-- 追加 -->
+    <section class="page" id="p-add">
+      <h2>商品を追加</h2>
+      <form class="search" id="searchForm">
+        <input type="search" id="q" placeholder="商品名の一部（例: wolves 黒）かURL" enterkeyhint="search" autocapitalize="off" autocorrect="off">
+        <button class="btn primary" id="searchBtn">検索</button>
+      </form>
+      <p class="hint">検索はパソコン側で行うので、結果が出るまで数秒かかることがあります。カタカナ（ジャケット、黒 など）でもある程度探せます。</p>
+      <div id="results"></div>
+    </section>
+
+    <!-- ログ -->
+    <section class="page" id="p-log">
+      <h2>入荷ログ <span class="count">（最新12件）</span></h2>
+      <div id="log"></div>
+    </section>
+
+    <!-- 設定 -->
+    <section class="page" id="p-set">
+      <h2>確認のペース</h2>
+      <div class="card">
+        <div class="field"><label>普段の間隔<span class="sub">この範囲でランダムに待ちます</span></label>
+          <span><input class="num" type="number" inputmode="numeric" id="interval"> 〜 <input class="num" type="number" inputmode="numeric" id="intervalMax"> 秒</span></div>
+        <div class="field"><label>高速モードの間隔</label><span><input class="num" type="number" inputmode="numeric" id="boostInterval"> 秒</span></div>
+        <div class="field"><label>「⚡ 高速」の長さ</label><span><input class="num" type="number" inputmode="numeric" id="boostMinutes"> 分</span></div>
+        <div class="field"><label>通知のあと確認を休む</label><span><input class="num" type="number" inputmode="numeric" id="pauseAfterNotify"> 分</span></div>
+        <div class="field"><label>再入荷したら商品ページを開く<span class="sub">パソコンで、いちばん上の商品を開きます</span></label>
+          <label class="toggle"><input type="checkbox" id="autoOpen"><span></span></label></div>
+        <div class="field"><label>追加した時点で在庫があるものも通知</label>
+          <label class="toggle"><input type="checkbox" id="notifyOnStart"><span></span></label></div>
+      </div>
+
+      <h2>高速モードの時間帯</h2>
+      <div class="card">
+        <div id="windows"></div>
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap">
+          <button class="btn" id="presetBtn">おすすめを追加</button>
+          <button class="btn" id="newWinBtn">＋ 時間帯を追加</button>
+        </div>
+        <div id="newWin" style="display:none; margin-top:12px">
+          <div class="days" id="newDays"></div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap">
+            <input type="time" id="newStart" value="10:55"> 〜 <input type="time" id="newEnd" value="11:30">
+            <input class="num" type="number" inputmode="numeric" id="newInt" value="5"> 秒ごと
+          </div>
+          <button class="btn primary" id="newWinSave" style="margin-top:10px">この時間帯を追加</button>
+        </div>
+      </div>
+
+      <h2>接続</h2>
+      <div class="card">
+        <div class="sub">トピック: <span id="topicView"></span></div>
+        <p class="hint">このページのアドレスを知っている人は操作もできるので、人に教えないでください。</p>
+        <button class="btn" id="resetBtn">接続先を変更する</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs"><div class="in">
+    <button data-tab="watch" class="on"><span class="ic">◉</span>監視中</button>
+    <button data-tab="add"><span class="ic">＋</span>追加</button>
+    <button data-tab="log"><span class="ic">☰</span>ログ</button>
+    <button data-tab="set"><span class="ic">⚙</span>設定</button>
+  </div></nav>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DAYS = ['日', '月', '火', '水', '木', '金', '土'];
+const IMG = (i, w = 200) => i ? (i.startsWith('http') || i.startsWith('//') ? (i.startsWith('//') ? 'https:' + i : i) : 'https://jp.supreme.com/cdn/shop/files/' + i) + (i.includes('?') ? '&' : '?') + 'width=' + w : '';
+const fmtT = t => new Date(t).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+const fmtTs = t => new Date(t).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
+
+// ---------- 接続先 ----------
+const hp = new URLSearchParams(location.hash.slice(1));
+if (hp.get('t')) { store.set('topic', hp.get('t')); if (hp.get('s')) store.set('server', hp.get('s')); history.replaceState(null, '', location.pathname); }
+const TOPIC = store.get('topic');
+const BASE = (store.get('server') || 'https://ntfy.sh').replace(/\/+$/, '');
+
+let S = null;            // パソコンから届いた最新の状態
+let lastHeard = 0;       // 最後にパソコンから何か届いた時刻
+let syncAskedAt = 0;
+const pendingAcks = {};
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+// ---------- 送受信 ----------
+const rid = () => Math.random().toString(36).slice(2, 10);
+async function send(op, okMsg) {
+  op.rid = rid();
+  try {
+    const r = await fetch(`${BASE}/${encodeURIComponent(TOPIC + '-cmd')}`, { method: 'POST', body: '#json ' + JSON.stringify(op) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (okMsg) pendingAcks[op.rid] = okMsg;
+    return op.rid;
+  } catch (e) {
+    toast('送信できませんでした（' + e.message + '）');
+    return null;
+  }
+}
+async function unpack(msg) {
+  if (!msg || !msg.startsWith('z:')) return null;
+  const bin = atob(msg.slice(2));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const ds = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(ds).text());
+}
+
+let es = null;
+async function handleRaw(m) {
+  if (!m || m.event !== 'message') return;
+  let d; try { d = await unpack(m.message); } catch (e) { return; }
+  if (!d) return;
+  lastHeard = Math.max(lastHeard, (m.time || 0) * 1000);
+  if (d.type === 'state') {
+    if (!S || d.at >= S.at) { S = d; render(); }
+  } else if (d.type === 'search') {
+    if (d.rid === searchRid) showResults(d);
+  } else if (d.type === 'ack') {
+    if (pendingAcks[d.rid] !== undefined) { toast(d.ok ? (d.msg || pendingAcks[d.rid]) : ('できませんでした: ' + d.msg)); delete pendingAcks[d.rid]; }
+    else if (!d.ok) toast('できませんでした: ' + d.msg);
+  }
+  updateConn();
+}
+// 直近に届いていた状態をまず読み込む（すぐ画面を出すため）
+async function loadRecent() {
+  try {
+    const r = await fetch(`${BASE}/${encodeURIComponent(TOPIC + '-state')}/json?poll=1&since=30m`, { cache: 'no-store' });
+    const lines = (await r.text()).split('\n').filter(Boolean);
+    for (const line of lines.slice(-15)) { try { await handleRaw(JSON.parse(line)); } catch (e) {} }
+  } catch (e) {}
+}
+// これから届くものを受け取り続ける
+function connect() {
+  if (es) es.close();
+  es = new EventSource(`${BASE}/${encodeURIComponent(TOPIC + '-state')}/sse`);
+  es.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } handleRaw(m); };
+  es.onerror = () => updateConn();
+}
+function sync() { syncAskedAt = Date.now(); send({ op: 'sync' }); updateConn(); }
+
+function updateConn() {
+  const now = Date.now();
+  const fresh = lastHeard && now - lastHeard < 7 * 60000;
+  const waiting = syncAskedAt && lastHeard < syncAskedAt && now - syncAskedAt < 20000;
+  const dead = syncAskedAt && lastHeard < syncAskedAt && now - syncAskedAt >= 20000;
+  $('dot').className = 'dot ' + (dead ? 'ng' : fresh ? 'ok' : '');
+  $('connText').textContent = waiting ? 'PCに接続中…' : dead ? 'PCから応答なし' : fresh ? 'PCと接続中' : '確認中…';
+  const b = $('banner');
+  if (dead) {
+    b.innerHTML = 'パソコンから応答がありません。Edge が閉じているか、パソコンがスリープ中かもしれません。' + (S ? `<br>（表示は ${fmtT(S.at)} 時点の情報です）` : '');
+    b.classList.add('on');
+  } else b.classList.remove('on');
+}
+setInterval(updateConn, 3000);
+
+// ---------- 描画 ----------
+function modeText() {
+  if (!S) return '<span class="spinner"></span> パソコンから状態を受け取っています…';
+  const c = S.cfg, r = S.run, m = S.mode, now = Date.now();
+  let t;
+  if (!c.enabled) t = '<b>停止中</b>';
+  else if (r.pausedUntil > now) t = `<b>休止中</b>（${fmtT(r.pausedUntil)} まで）`;
+  else if (m.kind === 'manual') t = `<span class="boost">⚡ 高速モード</span> ${m.interval}秒ごと（${fmtT(m.until)} まで）`;
+  else if (m.kind === 'window') t = `<span class="boost">⚡ 高速モード</span> ${m.interval}秒ごと（${esc(m.end)} まで）`;
+  else t = `<b>通常モード</b> ${m.interval}${m.intervalMax > m.interval ? '〜' + m.intervalMax : ''}秒ごと`;
+  return t + (r.lastRun ? ` ・ 最終確認 ${fmtTs(r.lastRun)}` : '') + (r.message ? `<br><span class="err">${esc(r.message)}</span>` : '');
+}
+
+function sizeChipHtml(url, all, selected, inStock, kind) {
+  const sel = selected || [];
+  return `<button class="chip ${sel.length ? '' : 'on'}" data-k="${kind}" data-u="${esc(url)}" data-s="">全サイズ</button>` +
+    all.map(s => `<button class="chip ${sel.includes(s) ? 'on' : ''} ${inStock.includes(s) ? 'in' : ''}" data-k="${kind}" data-u="${esc(url)}" data-s="${esc(s)}"><span class="d"></span>${esc(s)}</button>`).join('');
+}
+
+function render() {
+  $('status').innerHTML = modeText();
+  if (!S) return;
+  const c = S.cfg, now = Date.now();
+  $('enabled').checked = !!c.enabled;
+  $('enabledText').textContent = c.enabled ? 'オン' : 'オフ';
+  const boosting = S.mode.kind === 'manual';
+  $('boostBtn').textContent = boosting ? '高速を止める' : `⚡ 高速 ${c.boostMinutes}分`;
+  $('boostBtn').classList.toggle('on', boosting);
+  const paused = S.run.pausedUntil > now;
+  $('pauseBtn').textContent = paused ? '再開する' : '休止 30分';
+  $('pauseBtn').classList.toggle('on', paused);
+
+  // 監視中
+  $('itemCount').textContent = S.items.length ? S.items.length + '件' : '';
+  $('items').innerHTML = S.items.length ? S.items.map((it, i) => {
+    const watch = it.s.length ? it.s : null;
+    const hit = it.k.filter(s => !watch || watch.includes(s));
+    const other = watch ? it.k.filter(s => !watch.includes(s)) : [];
+    const st = it.e ? `<span class="err">${esc(it.e)}</span>`
+      : hit.length ? `<span class="ok">在庫あり: ${esc(hit.join(', '))}</span>` : `<span class="ng">${watch ? '指定サイズは売り切れ' : '全サイズ売り切れ'}</span>`;
+    return `<div class="card"><div class="row">
+      <img class="thumb" src="${esc(IMG(it.i))}" alt="" loading="lazy">
+      <div class="body"><div class="name"><span class="sub">${i + 1}.</span> <a href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.t || it.u.split('/').pop())}</a></div>
+        <div class="sub">${esc(it.c)}</div></div>
+      <div class="side">
+        <button class="iconbtn" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="上へ">▲</button>
+        <button class="iconbtn" data-down="${i}" ${i === S.items.length - 1 ? 'disabled' : ''} aria-label="下へ">▼</button>
+        <button class="iconbtn" data-del="${esc(it.u)}" aria-label="削除">×</button>
+      </div></div>
+      <div class="chips">${it.a.length ? sizeChipHtml(it.u, it.a, it.s, it.k, 'w') : '<span class="sub">サイズ情報を確認中…</span>'}</div>
+      <div class="state">${st}${other.length ? ` <span class="sub">（指定外の在庫: ${esc(other.join(', '))}）</span>` : ''}</div>
+    </div>`;
+  }).join('') : '<div class="empty">監視中の商品はありません。<br>下の「追加」から追加できます。</div>';
+
+  // ログ
+  $('log').innerHTML = S.log.length ? S.log.map(e => {
+    const d = new Date(e.at);
+    const day = `${d.getMonth() + 1}/${d.getDate()}(${DAYS[d.getDay()]})`;
+    const sizes = e.s.map(s => e.so[s] ? `<span class="logsize">${esc(s)} → ${fmtT(e.so[s])} 売り切れ</span>` : `<span class="logsize open">${esc(s)} 在庫あり</span>`).join('');
+    return `<div class="card"><div class="row"><img class="thumb" src="${esc(IMG(e.i))}" alt="" loading="lazy">
+      <div class="body"><div class="name"><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.t)}</a><span class="tag">${e.src === 'watch' ? '監視中' : 'ショップ'}</span></div>
+      <div class="sub">${esc(e.c)} ・ ${day} ${fmtTs(e.at)} 入荷</div><div>${sizes}</div></div></div></div>`;
+  }).join('') : '<div class="empty">まだ入荷の記録はありません</div>';
+
+  // 設定
+  for (const k of ['interval', 'intervalMax', 'boostInterval', 'boostMinutes', 'pauseAfterNotify'])
+    if (document.activeElement !== $(k)) $(k).value = c[k];
+  $('autoOpen').checked = !!c.autoOpen;
+  $('notifyOnStart').checked = !!c.notifyOnStart;
+  $('windows').innerHTML = c.boostWindows.length ? c.boostWindows.map((w, i) => `<div class="win"><span class="grow"><b>${w.days.map(d => DAYS[d]).join('')}</b> ${esc(w.start)}〜${esc(w.end)} <span class="sub">${w.interval}秒ごと</span></span>
+      <button class="iconbtn" data-delwin="${i}" aria-label="削除">×</button></div>`).join('') : '<div class="sub">まだありません</div>';
+  if (lastResults) showResults(lastResults);
+}
+
+// ---------- 操作（すぐ画面に反映して、パソコンにも送る） ----------
+function itemByUrl(u) { return S && S.items.find(x => x.u === u); }
+
+document.addEventListener('click', e => {
+  const chip = e.target.closest('.chip[data-k]');
+  if (chip && S) {
+    const u = chip.dataset.u, s = chip.dataset.s;
+    if (chip.dataset.k === 'w') {
+      const it = itemByUrl(u); if (!it) return;
+      it.s = !s ? [] : it.s.includes(s) ? it.s.filter(x => x !== s) : [...it.s, s];
+      render(); send({ op: 'sizes', url: u, sizes: it.s });
+    } else {
+      const set = pick[u] || (pick[u] = []);
+      pick[u] = !s ? [] : set.includes(s) ? set.filter(x => x !== s) : [...set, s];
+      showResults(lastResults);
+    }
+    return;
+  }
+  const up = e.target.closest('[data-up]'), down = e.target.closest('[data-down]');
+  if ((up || down) && S) {
+    const i = Number((up || down).dataset[up ? 'up' : 'down']), j = up ? i - 1 : i + 1;
+    [S.items[i], S.items[j]] = [S.items[j], S.items[i]];
+    render(); send({ op: 'order', order: S.items.map(x => x.u) });
+    return;
+  }
+  const del = e.target.closest('[data-del]');
+  if (del && S) {
+    const it = itemByUrl(del.dataset.del);
+    if (!confirm(`「${it ? it.t + ' (' + it.c + ')' : ''}」の監視をやめますか？`)) return;
+    S.items = S.items.filter(x => x.u !== del.dataset.del);
+    render(); send({ op: 'remove', url: del.dataset.del }, '削除しました');
+    return;
+  }
+  const add = e.target.closest('[data-add]');
+  if (add && lastResults) {
+    const p = lastResults.results.find(x => x.u === add.dataset.add); if (!p) return;
+    const sizes = pick[p.u] || [];
+    if (S) S.items.push({ u: p.u, t: p.t, c: p.c, i: p.i, s: sizes, a: p.v.map(v => v[0]), k: p.v.filter(v => v[1]).map(v => v[0]), e: '' });
+    render(); send({ op: 'add', url: p.u, sizes, t: p.t, c: p.c, i: p.i, a: p.v.map(v => v[0]) }, '追加しました');
+    return;
+  }
+  const dw = e.target.closest('[data-delwin]');
+  if (dw && S) { const i = Number(dw.dataset.delwin); S.cfg.boostWindows.splice(i, 1); render(); send({ op: 'windows', remove: i }); return; }
+  const day = e.target.closest('[data-day]');
+  if (day) { const d = Number(day.dataset.day); newDays = newDays.includes(d) ? newDays.filter(x => x !== d) : [...newDays, d]; renderNewDays(); return; }
+  const tab = e.target.closest('[data-tab]');
+  if (tab) {
+    document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b === tab));
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'p-' + tab.dataset.tab));
+    window.scrollTo(0, 0);
+    if (tab.dataset.tab === 'add') setTimeout(() => $('q').focus(), 50);
+  }
+});
+
+$('enabled').addEventListener('change', e => { if (S) { S.cfg.enabled = e.target.checked; render(); } send({ op: 'set', patch: { enabled: e.target.checked } }, e.target.checked ? '監視をオンにしました' : '監視を止めました'); });
+$('boostBtn').addEventListener('click', () => {
+  if (!S) return;
+  const on = S.mode.kind === 'manual';
+  if (on) { S.mode = { kind: 'normal', interval: S.cfg.interval, intervalMax: S.cfg.intervalMax }; S.cfg.boostUntil = 0; }
+  else { S.cfg.boostUntil = Date.now() + S.cfg.boostMinutes * 60000; S.mode = { kind: 'manual', interval: S.cfg.boostInterval, until: S.cfg.boostUntil }; }
+  render(); send({ op: 'boost', off: on }, on ? '高速モードを止めました' : '高速モードにしました');
+});
+$('pauseBtn').addEventListener('click', () => {
+  if (!S) return;
+  const paused = S.run.pausedUntil > Date.now();
+  S.run.pausedUntil = paused ? 0 : Date.now() + 30 * 60000;
+  render(); send({ op: 'pause', minutes: paused ? 0 : 30 }, paused ? '再開しました' : '30分休止します');
+});
+$('checkBtn').addEventListener('click', () => send({ op: 'check' }, '確認しています'));
+
+const NUMS = { interval: [10, 3600], intervalMax: [10, 3600], boostInterval: [3, 60], boostMinutes: [5, 180], pauseAfterNotify: [0, 60] };
+for (const [k, [lo, hi]] of Object.entries(NUMS)) {
+  $(k).addEventListener('change', e => {
+    const n = Math.max(lo, Math.min(hi, parseInt(e.target.value, 10) || lo));
+    e.target.value = n;
+    if (S) {
+      S.cfg[k] = n;
+      if (k === 'interval' && S.cfg.intervalMax < n) S.cfg.intervalMax = n;
+      if (k === 'intervalMax' && S.cfg.interval > n) S.cfg.interval = n;
+    }
+    send({ op: 'set', patch: S ? { interval: S.cfg.interval, intervalMax: S.cfg.intervalMax, [k]: n } : { [k]: n } }, '保存しました');
+  });
+}
+for (const k of ['autoOpen', 'notifyOnStart']) $(k).addEventListener('change', e => send({ op: 'set', patch: { [k]: e.target.checked } }, '保存しました'));
+$('presetBtn').addEventListener('click', () => send({ op: 'windows', preset: true }, '追加しました'));
+
+let newDays = [6];
+function renderNewDays() { $('newDays').innerHTML = DAYS.map((d, i) => `<button class="chip ${newDays.includes(i) ? 'on' : ''}" data-day="${i}">${d}</button>`).join(''); }
+$('newWinBtn').addEventListener('click', () => { $('newWin').style.display = $('newWin').style.display === 'none' ? '' : 'none'; renderNewDays(); });
+$('newWinSave').addEventListener('click', () => {
+  if (!newDays.length) return toast('曜日を選んでください');
+  const w = { days: [...newDays].sort(), start: $('newStart').value || '10:55', end: $('newEnd').value || '11:30', interval: Math.max(3, Math.min(600, parseInt($('newInt').value, 10) || 5)) };
+  if (S) { S.cfg.boostWindows.push(w); render(); }
+  send({ op: 'windows', window: w }, '時間帯を追加しました');
+  $('newWin').style.display = 'none';
+});
+
+// ---------- 検索 ----------
+let searchRid = null, lastResults = null;
+const pick = {};
+$('searchForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('q').value.trim();
+  if (!q) return;
+  $('q').blur();
+  $('results').innerHTML = '<div class="empty"><span class="spinner"></span> パソコンで検索しています…</div>';
+  lastResults = null;
+  searchRid = await send({ op: 'search', q });
+  const myRid = searchRid;
+  setTimeout(() => { if (searchRid === myRid && !lastResults) $('results').innerHTML = '<div class="empty">パソコンから返事がありません。もう一度お試しください。</div>'; }, 25000);
+});
+function showResults(d) {
+  if (!d) return;
+  lastResults = d;
+  if (d.error) { $('results').innerHTML = `<div class="empty">読み込めませんでした（${esc(d.error)}）</div>`; return; }
+  if (!d.results.length) { $('results').innerHTML = `<div class="empty">「${esc(d.q)}」に一致する商品が見つかりませんでした。英語の商品名でも試してください。</div>`; return; }
+  $('results').innerHTML = d.results.map(p => {
+    const added = S && S.items.some(x => x.u === p.u);
+    const all = p.v.map(v => v[0]), inS = p.v.filter(v => v[1]).map(v => v[0]);
+    const sel = pick[p.u] || [];
+    return `<div class="card"><div class="row"><img class="thumb" src="${esc(IMG(p.i))}" alt="" loading="lazy">
+      <div class="body"><div class="name"><a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t)}</a></div>
+      <div class="sub">${esc(p.c)}${p.pr ? ' ・ ¥' + Math.round(p.pr / 100).toLocaleString('ja-JP') : ''} ・ ${inS.length ? `<span class="ok">${inS.length}サイズ在庫あり</span>` : '売り切れ'}</div></div></div>
+      ${added ? '' : `<div class="chips">${sizeChipHtml(p.u, all, sel, inS, 'r')}</div>`}
+      <div style="margin-top:10px"><button class="btn ${added ? '' : 'primary'}" data-add="${esc(p.u)}" ${added ? 'disabled' : ''} style="width:100%">${added ? '追加済み' : sel.length ? `追加（${esc(sel.join(', '))}）` : '追加（全サイズ）'}</button></div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- 起動 ----------
+$('topicSave').addEventListener('click', () => {
+  const t = $('topicIn').value.trim().replace(/[^A-Za-z0-9_-]/g, '');
+  if (!t) return;
+  store.set('topic', t);
+  location.reload();
+});
+$('resetBtn').addEventListener('click', () => { if (confirm('接続先の設定を消しますか？')) { store.del('topic'); store.del('server'); location.reload(); } });
+
+if (!TOPIC) {
+  $('setup').style.display = '';
+} else if (typeof DecompressionStream === 'undefined') {
+  $('setup').style.display = '';
+  $('setup').innerHTML = '<h1>Supreme 再入荷チェッカー</h1><p>このブラウザには対応していません。iOS 16.4 以降の Safari で開いてください。</p>';
+} else {
+  $('app').style.display = '';
+  $('topicView').textContent = TOPIC;
+  render();
+  connect();
+  loadRecent();
+  sync();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { connect(); loadRecent(); sync(); }
+  });
+}
+</script>
+</body>
+</html>
