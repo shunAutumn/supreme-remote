@@ -8,7 +8,7 @@ Claude Code 向けのメモ。このリポジトリは GitHub Pages でそのま
 |---|---|
 | `index.html` | スマホ用ページ（1ファイル完結。HTML / CSS / JS をすべて含む） |
 | `icon.png` | ホーム画面用アイコン |
-| `supreme-size.user.js` | iPhone の Edge（Stay）用ユーザースクリプト。`#srw=…&s=…` を読んでサイズを選ぶ |
+| `supreme-size.user.js` | iPhone の Edge（Stay）用ユーザースクリプト。`#srw=…&s=…` を読んでサイズを選ぶ。`&cart=1` 付き（通知の「カートへ」）で開いたときだけ、カートに入れて「ご注文手続きへ」まで押す。**支払い・注文の確定は絶対に押さない**。変えたら `@version` を上げる（Stay の更新確認用） |
 
 ## しくみ
 
