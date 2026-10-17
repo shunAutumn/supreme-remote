@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Supreme 再入荷チェッカー: サイズを選んだ状態で開く
 // @description  通知から開いた Supreme の商品ページで、指定のサイズを選んだ状態にします。「カートへ」のリンクから開いたときだけ、カートに入れて「ご注文手続きへ」まで進めます（支払い・注文の確定はしません）
-// @version      1.4
+// @version      1.5
 // @match        https://jp.supreme.com/products/*
 // @match        https://*.supreme.com/products/*
 // @match        https://jp.supreme.com/cart*
@@ -28,7 +28,7 @@
 
   // 「ご注文手続きへ」を1回だけ押す（カートの小窓でも、カートのページでもよい）。その先の支払い・注文の確定は押さない
   function goCheckout() {
-    const end = Date.now() + 8000;
+    const end = Date.now() + 30000;   // 発売直後はカートの処理が遅いので長めに待つ
     const tryGo = () => {
       const btn = [...document.querySelectorAll('a, button, input[type=submit]')]
         .find(el => /ご注文手続き|注文手続き|チェックアウト|checkout/i.test(label(el)) && visible(el) && !el.disabled);
@@ -48,7 +48,7 @@
   if (/^\/cart/.test(location.pathname)) {
     let at = 0;
     try { at = +sessionStorage.getItem(FLAG) || 0; } catch (e) {}
-    if (at && Date.now() - at < 30000) goCheckout();
+    if (at && Date.now() - at < 120000) goCheckout();   // 発売直後はカートのページに移るのも遅い
     return;
   }
 
@@ -78,7 +78,7 @@
         || document.querySelector('form[action*="/cart/add"] [type=submit]')
         || [...document.querySelectorAll('button, input[type=submit]')].find(b => /カートに入れる|addto(cart|bag)/i.test(label(b)));
     };
-    const until = Date.now() + 4000;
+    const until = Date.now() + 15000;   // 発売直後はボタンが押せるようになるまで時間がかかる
     const tryCart = () => {
       const btn = findCart();
       if (btn && !btn.disabled) {
@@ -131,6 +131,6 @@
   // サイズ欄が出た瞬間・在庫の表示が変わった瞬間に確かめる
   observer = new MutationObserver(tryPick);
   observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
-  giveUpTimer = setTimeout(() => finish('サイズ欄が見つかりませんでした', '#b86200'), 15000);
+  giveUpTimer = setTimeout(() => finish('サイズ欄が見つかりませんでした', '#b86200'), 45000);   // 発売直後はページが重い
   tryPick();
 })();
