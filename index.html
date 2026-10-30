@@ -98,6 +98,7 @@
   .banner { background:var(--orange); color:#fff; border-radius:10px; padding:10px 12px; font-size:13px; margin-top:10px; display:none; }
   .banner.on { display:block; }
   .setup { padding-top:calc(40px + env(safe-area-inset-top)); }
+  .resin { width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--bg); font-size:16px; }
   .setup h1 { color:var(--red); font-size:20px; }
   .setup input { width:100%; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--card); font-size:16px; margin:6px 0 12px; }
   .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--red); border-radius:50%; animation:sp 0.8s linear infinite; vertical-align:-2px; }
@@ -149,6 +150,17 @@
       </form>
       <p class="hint">検索はパソコン側で行うので、結果が出るまで数秒かかることがあります。カタカナ（ジャケット、黒 など）でもある程度探せます。</p>
       <div id="results"></div>
+
+      <h2>新作の予約 <span class="count" id="resCount"></span></h2>
+      <div class="card">
+        <p class="sub" style="margin-top:0">新しく一覧に出た商品の名前に、キーワードがすべて入っていたら、自動で監視に加えて通知します。</p>
+        <input class="resin" id="resKw" placeholder="キーワード（例: box logo、パーカー 黒）" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="chips" id="resSizes"></div>
+        <input class="resin" id="resOther" placeholder="ほかのサイズ（例: 28, 30）" autocapitalize="off" autocorrect="off" spellcheck="false" style="margin-top:10px">
+        <p class="hint">サイズは<b>タップした順が優先順位</b>です。何も選ばないと全サイズが対象です。</p>
+        <button class="btn primary" id="resAdd" style="width:100%">予約する</button>
+      </div>
+      <div id="resList"></div>
     </section>
 
     <!-- ログ -->
@@ -394,6 +406,16 @@ function render() {
     </div>`;
   }).join('') : '<div class="empty">監視中の商品はありません。<br>下の「追加」から追加できます。</div>';
 
+  // 新作の予約
+  const rs = S.rs || [];
+  $('resCount').textContent = rs.length ? rs.length + '件' : '';
+  $('resList').innerHTML = rs.map(r => `<div class="card"><div class="row">
+      <div class="body"><div class="name">「${esc(r.k)}」</div>
+        <div class="chips" style="margin-top:6px">${(r.s.length ? r.s : ['全サイズ']).map((x, i) => `<span class="chip on">${r.s.length > 1 ? `<span class="n">${i + 1}</span>` : ''}${esc(x)}</span>`).join('')}</div>
+        <div class="sub" style="margin-top:6px">${r.h.length ? r.h.map(h => `<span class="ok">✓ ${esc(new Date(h.at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }))} に監視へ追加:</span> <a href="${esc(h.u)}" data-ext="">${esc(h.t)}</a>`).join('<br>') : '待機中（新しく一覧に出た商品をチェックしています）'}</div></div>
+      <div class="side"><button class="iconbtn" data-resdel="${esc(r.id)}" aria-label="予約を消す">×</button></div>
+    </div></div>`).join('');
+
   // ログ
   $('log').innerHTML = S.log.length ? S.log.map(e => {
     const d = new Date(e.at);
@@ -476,6 +498,16 @@ document.addEventListener('click', e => {
     render(); send({ op: 'add', url: p.u, sizes, t: p.t, c: p.c, i: p.i, a: p.v.map(v => v[0]) }, '追加しました');
     return;
   }
+  const rd = e.target.closest('[data-resdel]');
+  if (rd && S) {
+    const r = (S.rs || []).find(x => x.id === rd.dataset.resdel);
+    if (!confirm(`「${r ? r.k : ''}」の予約を消しますか？`)) return;
+    S.rs = S.rs.filter(x => x.id !== rd.dataset.resdel);
+    render(); send({ op: 'resDel', id: rd.dataset.resdel }, '予約を消しました');
+    return;
+  }
+  const rsz = e.target.closest('[data-rsize]');
+  if (rsz) { const z = rsz.dataset.rsize; resPick = resPick.includes(z) ? resPick.filter(x => x !== z) : [...resPick, z]; renderResSizes(); return; }
   const dw = e.target.closest('[data-delwin]');
   if (dw && S) { const i = Number(dw.dataset.delwin); S.cfg.boostWindows.splice(i, 1); render(); send({ op: 'windows', remove: i }); return; }
   const day = e.target.closest('[data-day]');
@@ -530,6 +562,23 @@ $('newWinSave').addEventListener('click', () => {
   if (S) { S.cfg.boostWindows.push(w); render(); }
   send({ op: 'windows', window: w }, '時間帯を追加しました');
   $('newWin').style.display = 'none';
+});
+
+// ---------- 新作の予約 ----------
+const RES_SIZES = ['Small', 'Medium', 'Large', 'XLarge', 'XXLarge'];
+let resPick = [];   // 選んだ順 = 優先順位
+function renderResSizes() {
+  $('resSizes').innerHTML = RES_SIZES.map(z => `<button class="chip ${resPick.includes(z) ? 'on' : ''}" data-rsize="${z}">${resPick.length > 1 && resPick.includes(z) ? `<span class="n">${resPick.indexOf(z) + 1}</span>` : ''}${z}</button>`).join('');
+}
+renderResSizes();
+$('resAdd').addEventListener('click', () => {
+  const kw = $('resKw').value.trim().replace(/\s+/g, ' ');
+  if (!kw) return toast('キーワードを入れてください');
+  const other = $('resOther').value.split(/[,、，]/).map(x => x.trim()).filter(Boolean);
+  const sizes = [...resPick, ...other.filter(x => !resPick.includes(x))];
+  if (S) { S.rs = [...(S.rs || []), { id: 'tmp' + Date.now(), k: kw, s: sizes, h: [] }]; render(); }
+  send({ op: 'resAdd', kw, sizes }, '予約しました');
+  $('resKw').value = ''; $('resOther').value = ''; resPick = []; renderResSizes();
 });
 
 // ---------- 検索 ----------
