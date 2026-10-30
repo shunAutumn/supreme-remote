@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Supreme 再入荷チェッカー: サイズを選んだ状態で開く
-// @description  通知から開いた Supreme の商品ページで、指定のサイズを選んだ状態にします。「カートへ」のリンクから開いたときだけ、カートに入れて「ご注文手続きへ」まで進めます（支払い・注文の確定はしません）
-// @version      1.5
+// @description  通知から開いた Supreme の商品ページで、指定のサイズを選んだ状態にします。「カートへ」のリンクから開いたときだけ、カートに入れて「ご注文手続きへ」まで進めます（新作の予約はカートに入れるだけ。支払い・注文の確定はしません）
+// @version      1.6
 // @match        https://jp.supreme.com/products/*
 // @match        https://*.supreme.com/products/*
 // @match        https://jp.supreme.com/cart*
@@ -15,6 +15,7 @@
 (function () {
   'use strict';
   const FLAG = 'srwGoCheckout';   // カートに入れたあと、カートのページに移っても「ご注文手続きへ」を押すための目印
+  const CHAIN = 'srwChain';       // 新作をまとめてカートへ: 残りの商品 { at, list: [[url, サイズ番号, サイズ名], …], multi }
 
   function show(text, color) {
     const tip = document.createElement('div');
@@ -44,11 +45,28 @@
     tryGo();
   }
 
+  // 新作をまとめてカートへ: 次の商品を開く。残りがなければ（まとめてのときは）カートのページへ
+  function goNext() {
+    let c = null;
+    try { c = JSON.parse(sessionStorage.getItem(CHAIN) || 'null'); sessionStorage.removeItem(CHAIN); } catch (e) {}
+    if (!c || Date.now() - c.at > 120000) return;
+    const list = c.list || [];
+    if (!list.length) {
+      if (c.multi && !/^\/cart/.test(location.pathname)) location.href = '/cart';
+      show('🛒 まとめてカートに入れました。購入手続きはご自身でどうぞ', '#d11a2a');
+      return;
+    }
+    const [u, v, s] = list[0];
+    const rest = list.slice(1);
+    location.href = u + '#srw=' + encodeURIComponent(v) + '&s=' + encodeURIComponent(s) + '&cart=2' + (rest.length ? '&next=' + encodeURIComponent(JSON.stringify(rest)) : '') + '&multi=1';
+  }
+
   // カートのページ: 直前に「カートへ」から入れたときだけ続きを行う
   if (/^\/cart/.test(location.pathname)) {
-    let at = 0;
-    try { at = +sessionStorage.getItem(FLAG) || 0; } catch (e) {}
-    if (at && Date.now() - at < 120000) goCheckout();   // 発売直後はカートのページに移るのも遅い
+    let at = 0, chain = false;
+    try { at = +sessionStorage.getItem(FLAG) || 0; chain = !!sessionStorage.getItem(CHAIN); } catch (e) {}
+    if (chain) setTimeout(goNext, 800);
+    else if (at && Date.now() - at < 120000) goCheckout();   // 発売直後はカートのページに移るのも遅い
     return;
   }
 
@@ -56,8 +74,15 @@
   const h = new URLSearchParams(location.hash.slice(1));
   const variantId = h.get('srw');
   const sizeTitle = h.get('s') || '';
-  const addToCart = h.get('cart') === '1';   // 「カートへ」のリンクから開いたときだけ
+  const cartOnly = h.get('cart') === '2';   // 新作の予約: カートに入れるだけ（ご注文手続きには進まない）
+  const addToCart = h.get('cart') === '1' || cartOnly;   // 「カートへ」のリンクから開いたときだけ
   if (!variantId && !sizeTitle) return;
+  if (cartOnly) {
+    let next = [];
+    try { next = JSON.parse(h.get('next') || '[]'); } catch (e) {}
+    const multi = h.get('multi') === '1' || next.length > 0;
+    try { sessionStorage.setItem(CHAIN, JSON.stringify({ at: Date.now(), list: Array.isArray(next) ? next : [], multi })); } catch (e) {}
+  }
 
   const SOLD_OUT_WAIT = 800;  // サイズ欄が出てから、売り切れと決めるまでの猶予（在庫の反映が少し遅れることがあるため）
   let selSeenAt = 0, done = false, observer = null, soldOutTimer = 0, giveUpTimer = 0;
@@ -68,6 +93,7 @@
     if (observer) observer.disconnect();
     clearTimeout(soldOutTimer); clearTimeout(giveUpTimer);
     if (text) show(text, color);
+    if (cartOnly && text) setTimeout(goNext, 2000);   // 売り切れなどで入れられなかったときも、次の商品へ
   };
 
   // サイズを選んだあと「カートに入れる」を1回だけ押し、続けて「ご注文手続きへ」
@@ -82,13 +108,19 @@
     const tryCart = () => {
       const btn = findCart();
       if (btn && !btn.disabled) {
+        if (cartOnly) {
+          btn.click();
+          show(`🛒 ${size} をカートに入れました`, '#d11a2a');
+          setTimeout(goNext, 1500);   // カートに入ったのが反映されてから次の商品へ（ページが移った場合はカートのページで続きを行う）
+          return;
+        }
         try { sessionStorage.setItem(FLAG, String(Date.now())); } catch (e) {}
         btn.click();
         show(`🛒 ${size} をカートに入れました`, '#d11a2a');
         setTimeout(goCheckout, 500);   // カートの小窓が開く場合。ページが移った場合はカートのページで続きを行う
         return;
       }
-      if (Date.now() > until) { show(`✓ ${size} を選びました。「カートに入れる」が見つからないので、ご自身で押してください`, '#b86200'); return; }
+      if (Date.now() > until) { show(`✓ ${size} を選びました。「カートに入れる」が見つからないので、ご自身で押してください`, '#b86200'); if (cartOnly) setTimeout(goNext, 2000); return; }
       setTimeout(tryCart, 150);
     };
     setTimeout(tryCart, 250);   // 選んだサイズが画面に反映されてから
